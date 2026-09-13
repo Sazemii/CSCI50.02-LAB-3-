@@ -1,0 +1,53 @@
+* Lab 3: 32-bit ripple carry adder (chaining full adders)
+
+* Header (required!)
+.include "8clocks.jsim"
+.include "nominal.jsim"
+.include "stdcell.jsim"
+
+* ---------------------------------------------------------------
+* Full adder (from Lab 2)
+*   sum   = a XOR b XOR c_in
+*   c_out = ab + c_in(a XOR b) = NAND(NAND(a,b), NAND(a XOR b, c_in))
+* ---------------------------------------------------------------
+.subckt fa a b c_in sum c_out
+Xx1 a b p xor2
+Xx2 p c_in sum xor2
+Xn1 a b g_n nand2
+Xn2 p c_in t_n nand2
+Xn3 g_n t_n c_out nand2
+.ends
+
+* ---------------------------------------------------------------
+* 32-bit ripple carry adder
+* Same idea as the 2-bit chain:
+*   Xbit0 a0 b0 ci0 sum0 co0 fa
+*   Xbit1 a1 b1 co0 sum1 co1 fa
+* but written with iterators so one line makes all 32 full adders.
+*
+* Each column below lines up bit by bit (bit 31 first, bit 0 last):
+*   carry in : cout30  c29 ... c0  cin0
+*   carry out: cout31 cout30 c29 ... c0
+* so the carry out of bit i feeds the carry in of bit i+1.
+* The last two carries are named cout31/cout30 so they come out
+* of the subckt directly.
+* ---------------------------------------------------------------
+.subckt add32 a[31:0] b[31:0] cin0 sum[31:0] cout[31:30]
+Xbits a[31:0] b[31:0] cout30 c[29:0] cin0 sum[31:0] cout[31:30] c[29:0] fa
+.ends
+
+* instantiation (no carry-in for now)
+Xsum a[31:0] b[31:0] 0 sum[31:0] c31 c30 add32
+
+* ---------------------------------------------------------------
+* Simple test with digital waveforms (example values only)
+* ---------------------------------------------------------------
+Wa a[31:0] nrz(0, 5, 20ns, 0ns, 0.001ns, 0.001ns)
++ 0x00000003 0x00000005 0x0000FFFF 0x12345678
+Wb b[31:0] nrz(0, 5, 20ns, 0ns, 0.001ns, 0.001ns)
++ 0x00000004 0x00000007 0x00000001 0x11111111
+
+.tran 80ns
+.plot a[31:0]
+.plot b[31:0]
+.plot sum[31:0]
