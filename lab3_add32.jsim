@@ -1,0 +1,82 @@
+* Group: MGA HALIMAW
+* Del Rosario, Alexander Anton
+* Landicho, Carl Jacob 
+* Montesa, Fracis Dave
+*
+* Lab 3: 32-bit ripple carry adder
+
+.include "8clocks.jsim"
+.include "nominal.jsim"
+.include "stdcell.jsim"
+
+* ---------------------------------------------------------------
+* Full adder (reused from Lab 2)
+*   sum   = a XOR b XOR c_in
+*   c_out = ab + c_in(a XOR b)
+*         = NAND( NAND(a,b), NAND(a XOR b, c_in) )
+* JSim's xor2 is used because building XOR out of NANDs takes
+* 4 gates (more delay and more gates); the carry uses NAND-NAND,
+* which is equivalent to AND-OR but faster and with fewer gates.
+* ---------------------------------------------------------------
+.subckt fa a b c_in sum c_out
+Xp a b p xor2
+Xs p c_in sum xor2
+Xg a b g_n nand2
+Xt p c_in t_n nand2
+Xc g_n t_n c_out nand2
+.ends
+
+* ---------------------------------------------------------------
+* 32-bit ripple carry adder
+* One iterated instantiation creates all 32 full adders.
+* The carry nodes are named cout31..cout0 (cout[31:0]):
+*   bit i gets carry-in cout(i-1) and produces carry-out cout(i),
+*   bit 0 gets carry-in cin0.
+* Lined up column by column (bit 31 first ... bit 0 last):
+*   a      : a31    a30    ...  a0
+*   b      : b31    b30    ...  b0
+*   c_in   : cout30 cout29 ...  cin0     <- cout[30:0] cin0
+*   sum    : sum31  sum30  ...  sum0
+*   c_out  : cout31 cout30 ...  cout0    <- cout[31:0]
+* Since cout31 and cout30 are also port names, the final two
+* carries leave the subckt without any extra gates.
+* ---------------------------------------------------------------
+.subckt add32 a[31:0] b[31:0] cin0 sum[31:0] cout[31:30]
+Xbit a[31:0] b[31:0] cout[30:0] cin0 sum[31:0] cout[31:0] fa
+.ends
+
+* instantiation (carry-in tied to ground = 0; c31/c30 unused for now)
+Xsum a[31:0] b[31:0] 0 sum[31:0] c31 c30 add32
+
+* ---------------------------------------------------------------
+* Test cases (one every 20ns)
+*    a)  0x00000000 + 0x00000000
+*    b)  0x55555555 + 0x00000000
+*    c)  0x00000000 + 0x55555555
+*    d)  0x55555555 + 0x55555555
+*    e)  0xFFFFFFFF + 0xFFFFFFFF
+*    f)  0xAAAAAAAA + 0x00000000
+*    g)  0x00000000 + 0xAAAAAAAA
+*    h)  0xAAAAAAAA + 0xAAAAAAAA
+*    i)  0x00000001 + 0xFFFFFFFF
+*    j)  0xFFFFFFFF + 0x00000001
+*
+* i) and j) have the longest transition delay: the carry generated
+* at bit 0 has to ripple through all 32 full adders (every bit
+* propagates, since a XOR b = 1 everywhere), so sum31 only settles
+* after ~32 carry-gate delays. In the other cases carries are either
+* absent or stop after one bit, so the sum settles almost immediately.
+* ---------------------------------------------------------------
+Wa a[31:0] nrz(0, 5, 20ns, 0ns, 0.001ns, 0.001ns)
++ 0x00000000 0x55555555 0x00000000 0x55555555 0xFFFFFFFF
++ 0xAAAAAAAA 0x00000000 0xAAAAAAAA 0x00000001 0xFFFFFFFF
+Wb b[31:0] nrz(0, 5, 20ns, 0ns, 0.001ns, 0.001ns)
++ 0x00000000 0x00000000 0x55555555 0x55555555 0xFFFFFFFF
++ 0x00000000 0xAAAAAAAA 0xAAAAAAAA 0xFFFFFFFF 0x00000001
+
+.tran 200ns
+.plot a[31:0]
+.plot b[31:0]
+.plot sum[31:0]
+.plot c31
+.plot c30
